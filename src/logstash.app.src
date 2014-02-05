@@ -1,0 +1,18 @@
+%% -*- erlang -*-
+
+{application, logstash,
+ [{description, "Logs stuff into logstash"},
+  {vsn, "1"},
+  {registered, [logstash,
+                logstash_sup]},
+  {applications, [kernel,
+                  stdlib]},
+  {mod, {logstash_app, []}},
+  {env,
+   [{min_severity, info},
+    {host, "localhost"},
+    {port, 9123},
+    {max_message_lines, 1000},
+    {truncate_messages, true},
+    {filename, "/tmp/erlang.log"}]}
+ ]}.
