@@ -32,7 +32,8 @@
           messages=[] :: [iolist()],
           nr_messages=0 :: integer(),
           messages_size=0 :: integer(),
-          messages_dropped=false :: boolean()}).
+          messages_dropped=false :: boolean(),
+          timer}).
 
 
 start_link() ->
@@ -117,7 +118,7 @@ handle_cast(deliver, State=#state{file=File, file_size=File_size,
                           file_size=New_file_size}
                 end
         end,
-    {noreply, New_state};
+    {noreply, New_state#state{timer=undefined}};
 
 handle_cast(rotate_log, State) ->
     New_state =
@@ -152,7 +153,8 @@ handle_cast(initialize, State) ->
 handle_cast({send_raw, Message_raw},
             State=#state{messages=Messages, nr_messages=Nr_messages,
                          messages_dropped=Messages_dropped,
-                         messages_size=Messages_size}) ->
+                         messages_size=Messages_size,
+                         timer=Timer}) ->
     New_state =
         if
             Nr_messages =< ?MAX_MESSAGES ->
@@ -170,15 +172,24 @@ handle_cast({send_raw, Message_raw},
                                       <<"Message buffer overflow">>,
                                       [{pid, conv_binary(self())},
                                        {module, ?MODULE},
-                                       {file, ?FILE}, {line, ?LINE}]),
+                                       {file, conv_binary(?FILE)},
+                                       {line, ?LINE}]),
                         State#state{messages=[[Error_msg, $\n] | Messages],
                                     messages_dropped=true,
                                     messages_size=(Messages_size +
                                                        size(Error_msg) + 1)}
                 end
         end,
-    {ok, _} = timer:apply_after(?SEND_INTERVAL, ?MODULE, deliver, []),
-    {noreply, New_state};
+    New_timer =
+        case Timer of
+            undefined ->
+                {ok, Tref} = timer:apply_after(
+                               ?SEND_INTERVAL, ?MODULE, deliver, []),
+                Tref;
+            _ ->
+                Timer
+        end,
+    {noreply, New_state#state{timer=New_timer}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
