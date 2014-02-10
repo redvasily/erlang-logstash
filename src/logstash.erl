@@ -172,7 +172,7 @@ handle_cast({send_raw, Message_raw},
                                        {module, ?MODULE},
                                        {file, ?FILE}, {line, ?LINE}]),
                         State#state{messages=[[Error_msg, $\n] | Messages],
-                                    messages_dropped=false,
+                                    messages_dropped=true,
                                     messages_size=(Messages_size +
                                                        size(Error_msg) + 1)}
                 end
