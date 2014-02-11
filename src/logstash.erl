@@ -212,7 +212,7 @@ format_message(Severity, Message, Extra) ->
     Msg = [{severity, conv_binary(Severity)},
            {num_severity, numerical_severity(Severity)},
            {message, conv_binary(Message)} | Extra],
-    iolist_to_binary(mochijson2:encode(Msg)).
+    iolist_to_binary(logstash_mochijson2:encode(Msg)).
 
 
 numerical_severity(debug) ->
