@@ -88,7 +88,7 @@ format(Data) ->
         false ->
             event:format("~p", [Data]);
         true ->
-            {Msg, _Size} = trunc_io:print(Data, 10240),
+            {Msg, _Size} = logstash_trunc_io:print(Data, 10240),
             Bin = force_binary(Msg),
             Bin
     end.

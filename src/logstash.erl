@@ -256,5 +256,5 @@ conv_binary(Arg) when is_pid(Arg) ->
     list_to_binary(pid_to_list(Arg));
 
 conv_binary(Arg) ->
-    {Msg, _Size} = trunc_io:print(Arg, 10240),
+    {Msg, _Size} = logstash_trunc_io:print(Arg, 10240),
     iolist_to_binary(Msg).
