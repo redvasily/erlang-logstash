@@ -14,5 +14,7 @@
     {port, 9123},
     {max_message_lines, 1000},
     {truncate_messages, true},
+    {disable_standard_event_handlers, false},
+    {truncate_messages, true},
     {filename, "/tmp/erlang.log"}]}
  ]}.

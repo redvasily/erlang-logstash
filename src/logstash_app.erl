@@ -14,14 +14,21 @@ start(_Type, _Args) ->
             ok = error_logger:add_report_handler(logstash_event_handler)
     end,
 
-    %% Disable the default error logger handlers and SASL handlers.
-    ok = lists:foreach(
-           fun(Handler) ->
-                   gen_event:delete_handler(
-                     error_logger, Handler, {stop_please, ?MODULE})
-           end,
-           [error_logger, error_logger_tty_h, sasl_report_tty_h,
-            sasl_report_file_h]),
+    %% Disable default error logger handlers and SASL handlers.
+    {ok, Disable} = application:get_env(
+                      logstash, disable_standard_event_handlers),
+    case Disable of
+        true ->
+            lists:foreach(
+              fun(Handler) ->
+                      gen_event:delete_handler(
+                        error_logger, Handler, {stop_please, ?MODULE})
+              end,
+              [error_logger, error_logger_tty_h, sasl_report_tty_h,
+               sasl_report_file_h]);
+        false ->
+            pass
+    end,
 
     Result.
 

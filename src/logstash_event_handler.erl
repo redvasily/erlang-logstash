@@ -84,7 +84,8 @@ format(Event={event, _Severity, _Module, _Message, _Counter}) ->
     Event;
 
 format(Data) ->
-    case config:get(syslog, truncate_messages) of
+    {ok, Truncate_messages} = application:get_env(logstash, truncate_messages),
+    case Truncate_messages of
         false ->
             event:format("~p", [Data]);
         true ->
