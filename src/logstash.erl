@@ -33,6 +33,7 @@
           nr_messages=0 :: integer(),
           messages_size=0 :: integer(),
           messages_dropped=false :: boolean(),
+          encoder,
           timer}).
 
 
@@ -58,7 +59,7 @@ send(Severity, Message) ->
 
 send(Severity, Message, Extra) ->
     gen_server:cast(
-      ?SERVER, {send_raw, format_message(Severity, Message, Extra)}).
+      ?SERVER, {send_raw, {format, Severity, Message, Extra}}).
 
 
 deliver() ->
@@ -134,12 +135,14 @@ handle_cast(rotate_log, State) ->
                 {ok, Filename} = application:get_env(filename),
                 file:rename(Filename ++ ".1", Filename ++ ".2"),
                 file:rename(Filename, Filename ++ ".1"),
+                Encoder = get_encoder(),
                 case file:open(Filename, [write, raw, binary]) of
                     {ok, File} ->
                         deliver(),
-                        State#state{file=File, file_size=0};
+                        State#state{file=File, file_size=0, encoder=Encoder};
                     _ ->
-                        State#state{file=undefined, file_size=0}
+                        State#state{file=undefined, file_size=0,
+                                    encoder=Encoder}
                 end;
             false ->
                 State
@@ -148,13 +151,21 @@ handle_cast(rotate_log, State) ->
 
 handle_cast(initialize, State) ->
     {ok, _} = timer:apply_after(?SEND_INTERVAL, ?MODULE, deliver, []),
-    {noreply, State#state{}};
+    {noreply, State#state{encoder=get_encoder()}};
 
-handle_cast({send_raw, Message_raw},
+handle_cast({send_raw, Msg},
             State=#state{messages=Messages, nr_messages=Nr_messages,
                          messages_dropped=Messages_dropped,
                          messages_size=Messages_size,
-                         timer=Timer}) ->
+                         timer=Timer, encoder=Encoder}) ->
+    Message_raw =
+        if
+            is_binary(Msg) ->
+                Msg;
+            true ->
+                {format, Severity, Message, Extra} = Msg,
+                format_message(Encoder, Severity, Message, Extra)
+        end,
     New_state =
         if
             Nr_messages =< ?MAX_MESSAGES ->
@@ -168,6 +179,7 @@ handle_cast({send_raw, Message_raw},
                         State;
                     true ->
                         Error_msg = format_message(
+                                      Encoder,
                                       error,
                                       <<"Message buffer overflow">>,
                                       [{pid, conv_binary(self())},
@@ -207,12 +219,12 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
-format_message(Severity, Message, Extra) ->
+format_message(Encoder, Severity, Message, Extra) ->
     %% Numerical_severity = numerical_severity(Severity),
     Msg = [{severity, conv_binary(Severity)},
            {num_severity, numerical_severity(Severity)},
            {message, conv_binary(Message)} | Extra],
-    iolist_to_binary(logstash_mochijson2:encode(Msg)).
+    iolist_to_binary(Encoder(Msg)).
 
 
 numerical_severity(debug) ->
@@ -258,3 +270,8 @@ conv_binary(Arg) when is_pid(Arg) ->
 conv_binary(Arg) ->
     {Msg, _Size} = logstash_trunc_io:print(Arg, 10240),
     iolist_to_binary(Msg).
+
+
+get_encoder() ->
+    {ok, {Module, Function}} = application:get_env(logstash, encoder_factory),
+    Module:Function().

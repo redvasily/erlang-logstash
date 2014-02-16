@@ -16,5 +16,7 @@
     {truncate_messages, true},
     {disable_standard_event_handlers, false},
     {truncate_messages, true},
-    {filename, "/tmp/erlang.log"}]}
+    {filename, "/tmp/erlang.log"},
+    {encoder_factory, {mochijson2_factory, new}}
+   ]}
  ]}.
