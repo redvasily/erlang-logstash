@@ -46,7 +46,7 @@ initialize() ->
 
 
 send_raw(Message) ->
-    gen_server:cast(?SERVER, {send_raw, conv:binary(Message)}).
+    gen_server:cast(?SERVER, {send, info, Message, []}).
 
 
 send(Message) ->
@@ -59,7 +59,7 @@ send(Severity, Message) ->
 
 send(Severity, Message, Extra) ->
     gen_server:cast(
-      ?SERVER, {send_raw, {format, Severity, Message, Extra}}).
+      ?SERVER, {send, Severity, Message, Extra}).
 
 
 deliver() ->
@@ -153,23 +153,31 @@ handle_cast(initialize, State) ->
     {ok, _} = timer:apply_after(?SEND_INTERVAL, ?MODULE, deliver, []),
     {noreply, State#state{encoder=get_encoder()}};
 
-handle_cast({send_raw, Msg},
+handle_cast({send, Severity, Message, Extra},
             State=#state{messages=Messages, nr_messages=Nr_messages,
                          messages_dropped=Messages_dropped,
                          messages_size=Messages_size,
                          timer=Timer, encoder=Encoder}) ->
-    Message_raw =
-        if
-            is_binary(Msg) ->
-                Msg;
-            true ->
-                {format, Severity, Message, Extra} = Msg,
-                format_message(Encoder, Severity, Message, Extra)
+    Formatted =
+        case Message of
+            _ when is_binary(Message) ->
+                Message;
+            _ when is_list(Message) ->
+                make_binary(Message);
+            {logstash_format, Data} ->
+                format(Data);
+            {logstash_format, Format, Data} ->
+                format(Format, Data);
+            _ ->
+                format(Message)
         end,
+
+    Encoded = encode_message(Encoder, Severity, Formatted, Extra),
+
     New_state =
         if
             Nr_messages =< ?MAX_MESSAGES ->
-                Part = iolist_to_binary([Message_raw, $\n]),
+                Part = iolist_to_binary([Encoded, $\n]),
                 State#state{messages=[Part | Messages],
                             nr_messages=Nr_messages + 1,
                             messages_size=Messages_size + size(Part)};
@@ -178,7 +186,7 @@ handle_cast({send_raw, Msg},
                     Messages_dropped ->
                         State;
                     true ->
-                        Error_msg = format_message(
+                        Error_msg = encode_message(
                                       Encoder,
                                       error,
                                       <<"Message buffer overflow">>,
@@ -219,7 +227,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
-format_message(Encoder, Severity, Message, Extra) ->
+encode_message(Encoder, Severity, Message, Extra) ->
     %% Numerical_severity = numerical_severity(Severity),
     Msg = [{severity, conv_binary(Severity)},
            {num_severity, numerical_severity(Severity)},
@@ -275,3 +283,47 @@ conv_binary(Arg) ->
 get_encoder() ->
     {ok, {Module, Function}} = application:get_env(logstash, encoder_factory),
     Module:Function().
+
+
+format(Data) ->
+    {ok, Truncate_messages} = application:get_env(logstash, truncate_messages),
+    case Truncate_messages of
+        false ->
+            event:format("~p", [Data]);
+        true ->
+            {Msg, _Size} = logstash_trunc_io:print(Data, 10240),
+            Bin = force_binary(Msg),
+            Bin
+    end.
+
+
+format(Format, Data) ->
+    case Data of
+        [] ->
+            make_binary(Format);
+        _ ->
+            case (catch io_lib:format(Format, Data)) of
+                {'EXIT', _} ->
+                    iolist_to_binary(
+                      io_lib:format("Format FAIL: io_lib:format(~p, ~p)",
+                                    [Format, Data]));
+                Msg ->
+                    iolist_to_binary(Msg)
+            end
+    end.
+
+
+force_binary(Arg) when is_binary(Arg) ->
+    Arg;
+
+force_binary(Arg) when is_list(Arg) ->
+    list_to_binary(Arg).
+
+
+make_binary(Input) ->
+    try
+        iolist_to_binary(Input)
+    catch
+        _:_ ->
+            iolist_to_binary(io_lib:format("~p", [Input]))
+    end.

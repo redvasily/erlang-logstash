@@ -10,7 +10,7 @@ suite() ->
 
 
 all() ->
-    [basic].
+    [basic, basic_list, error_logger, error_logger2].
 
 
 init_per_suite(Config) ->
@@ -103,11 +103,58 @@ basic(_Config) ->
     file:close(File),
 
     Decoded = [logstash_mochijson2:decode(Line) || Line <- Lines],
+    Messages = [proplists:get_value(<<"message">>, Properties) ||
+                   {struct, Properties} <- Decoded],
+    true = lists:member(<<"Some message">>, Messages),
+    ok.
 
-    true = lists:member(
-             {struct,[{<<"severity">>, <<"info">>},
-                      {<<"num_severity">>, 20},
-                      {<<"message">>, <<"Some message">>}]},
-             Decoded),
 
+basic_list(_Config) ->
+    logstash:send("Some message"),
+    logstash:deliver(),
+    timer:sleep(100),
+
+    {ok, Filename} = application:get_env(logstash, filename),
+    {ok, File} = file:open(Filename, [read, binary]),
+    Lines = read_lines(File),
+    file:close(File),
+
+    Decoded = [logstash_mochijson2:decode(Line) || Line <- Lines],
+    Messages = [proplists:get_value(<<"message">>, Properties) ||
+                   {struct, Properties} <- Decoded],
+    true = lists:member(<<"Some message">>, Messages),
+    ok.
+
+
+error_logger(_Config) ->
+    error_logger:error_msg("error_logger:error_msg"),
+    logstash:deliver(),
+    timer:sleep(100),
+
+    {ok, Filename} = application:get_env(logstash, filename),
+    {ok, File} = file:open(Filename, [read, binary]),
+    Lines = read_lines(File),
+    file:close(File),
+
+    Decoded = [logstash_mochijson2:decode(Line) || Line <- Lines],
+    Messages = [proplists:get_value(<<"message">>, Properties) ||
+                   {struct, Properties} <- Decoded],
+    true = lists:member(<<"error_logger:error_msg">>, Messages),
+    ok.
+
+
+error_logger2(_Config) ->
+    error_logger:error_msg("error_logger:error_msg ~p", [[1, 2]]),
+    logstash:deliver(),
+    timer:sleep(100),
+
+    {ok, Filename} = application:get_env(logstash, filename),
+    {ok, File} = file:open(Filename, [read, binary]),
+    Lines = read_lines(File),
+    file:close(File),
+
+    Decoded = [logstash_mochijson2:decode(Line) || Line <- Lines],
+    Messages = [proplists:get_value(<<"message">>, Properties) ||
+                   {struct, Properties} <- Decoded],
+    true = lists:member(<<"error_logger:error_msg [1,2]">>, Messages),
     ok.
