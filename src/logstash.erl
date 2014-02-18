@@ -256,6 +256,9 @@ numerical_severity(warning_report) ->
 numerical_severity(error) ->
     50;
 
+numerical_severity(crash_report) ->
+    50;
+
 numerical_severity(error_report) ->
     50;
 
