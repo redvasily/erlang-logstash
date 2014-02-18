@@ -72,7 +72,7 @@ rotate_log() ->
 
 init([]) ->
     initialize(),
-    {ok, #state{}}.
+    {ok, #state{encoder=get_encoder()}}.
 
 
 handle_call(_Request, _From, State) ->
