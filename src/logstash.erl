@@ -317,7 +317,7 @@ force_binary(Arg) when is_binary(Arg) ->
     Arg;
 
 force_binary(Arg) when is_list(Arg) ->
-    list_to_binary(Arg).
+    iolist_to_binary(Arg).
 
 
 make_binary(Input) ->
