@@ -5,7 +5,7 @@
 
 -spec fix_binary(binary()) -> binary().
 fix_binary(Input) ->
-    fix_binary_(Input, unicode, []).
+    fix_binary_(iolist_to_binary(Input), unicode, []).
 
 
 fix_binary_(<<>>, _In_encoding, Acc) ->
